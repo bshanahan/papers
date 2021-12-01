@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+
+# 
+# Run a scaling of 2D blob
+#
+
+from __future__ import print_function
+try:
+  from builtins import str
+except:
+  pass
+
+from boututils.run_wrapper import shell, shell_safe, launch_safe, getmpirun
+from boutdata.collect import collect
+import numpy as np
+import matplotlib.pyplot as plt
+from sys import stdout, exit
+from scipy.signal import argrelextrema
+from MPM_mimic import synthetic_probe
+from math import ceil
+MPIRUN = getmpirun()
+from scipy.signal import find_peaks
+
+print("Running blob scaling")
+
+shell_safe("make > make.log")
+delta_list = [np.random.uniform(.025,.25) for _ in range(20)]
+alpha_list = [np.random.uniform(.25,.6) for _ in range(20)]
+Te_list =  [np.random.uniform(10,30) for _ in range(20)]
+success = True
+
+# for ellipticity in e_list:
+for delta, alpha, Te in zip(delta_list,alpha_list, Te_list):
+  #for alpha in alpha_list:
+  nproc = 8
+  Lx = 0.2
+  Lz = 0.2
+
+  dir = "/home/bs/hermes-1/blob2d/synth_diag/d_{:1.2f}_a_{:1.2f}".format(delta, alpha)
+  cmd = "./hermes-1 -d " + str(dir) + " all:delta_perp=" + str(delta) + " all:alpha=" + str(alpha)
+
+  shell("mkdir " + str(dir))
+  shell("cp " + str(dir)+"/../BOUT.inp " + str(dir))
+
+  s, out = launch_safe(cmd, runcmd=MPIRUN, nproc=nproc, mthread=1, pipe=True)
+
+
+delta_list = np.asarray(delta_list)
+indices = np.arange(0,delta_list.shape[0])
+
+deltas_measured = np.zeros(delta_list.shape[0])
+v_measured = np.zeros(delta_list.shape[0])
+deltas_real = np.zeros(delta_list.shape[0])
+v_real = np.zeros(delta_list.shape[0])
+np.savez('synth_blob_sim_input', delta_list=delta_list, alpha_list=alpha_list)
+for ind, delta, alpha in zip(indices,delta_list, alpha_list):
+  dir = "/home/bs/hermes-1/blob2d/synth_diag/d_{:1.2f}_a_{:1.2f}".format(delta, alpha)
+
+  t_range = [120,200]
+  t_cutoff = 1e-5
+  d_CA, delta_real, v_CA, v_r_0, v_r, I_CA = synthetic_probe(path=str(dir), t_range=t_range, tcutoff=t_cutoff)
+  deltas_measured[ind] = d_CA
+  deltas_real[ind] = delta_real
+  v_measured[ind] = np.max(v_CA)
+  if np.asarray(v_r).all() == 0:
+    v_max=[0]    
+  else:
+    v_peak_loc = find_peaks(v_r)
+    v_max = v_r[v_peak_loc[0]]
+  if np.asarray(v_max).size == 0:
+    v_real[ind] = np.max(v_r[t_range[0]:t_range[-1]])
+  else:
+    v_real[ind] = v_max[0]
+  
+deltas_measured = deltas_measured[deltas_measured.nonzero()]
+v_measured = v_measured[v_measured.nonzero()]
+deltas_real = deltas_real[deltas_real.nonzero()]
+v_real = v_real[v_real.nonzero()]
+
+f = np.load('/home/bs/Downloads/te_1.1_l60_flat.npz') 
+f_t = np.load('/home/bs/Downloads/te_1.1_l60.npz')
+f_exp = np.load('/home/bs/Downloads/filament_data.npz')
+f_SD = np.load('synth_blob_sim.npz')
+
+deltas_measured = f_SD['deltas_measured']
+deltas_real = f_SD['deltas_real']
+v_measured = f_SD['v_measured']
+v_real = f_SD['v_real']
+
+deltas = f['deltas']
+vmax = f['vmax']
+deltas_t = f_t['deltas']
+vmax_t = f_t['vmax']
+
+delta_exp = f_exp['delta_60']
+v_exp = f_exp['v_r_60']
+
+del f
+del f_t
+
+plt.rc('font', family='Serif')
+plt.figure(figsize=(8,4.5))
+plt.grid(alpha=0.5)
+
+plt.plot(100*deltas,vmax, 'o-', color='C1', label='Simulation, $\~T=0$', alpha=0.5)
+plt.plot(100*deltas_t,vmax_t, 'o-', color='C0', label='Simulation, $\~T=0.1T_0$', alpha=0.5)
+plt.fill_between(100*deltas, vmax-0.2*vmax, vmax+0.2*vmax, facecolor='C1', alpha=.3, edgecolor='none')
+plt.fill_between(100*deltas_t, vmax_t-0.2*vmax_t, vmax_t+0.2*vmax_t, facecolor='C0', alpha=.3, edgecolor='none')
+
+deltas_zipped = zip(1e2*deltas_measured, 1e2*deltas_real)
+v_zipped = zip(v_measured, v_real)
+for d,v in zip(deltas_zipped,v_zipped):
+  plt.plot(d,v,'g', alpha=0.28)
+plt.plot(100*deltas_measured,v_measured,'go', label='Synthetic Measurement', markeredgecolor='white', markersize=9)
+plt.plot(100*deltas_real,v_real,'go', mfc='none', label='Calculated from Simulation', markeredgewidth=2, markersize=9)
+
+plt.xlabel(r"$\delta_Z$ [cm] ", fontsize=18)
+plt.ylabel(r"$v_{max}$ [m/s]", fontsize=18)
+plt.tick_params('both', labelsize=14)
+plt.legend(fancybox=True, loc='best', framealpha=0, fontsize=12)
+plt.tight_layout()
+np.savez('synth_blob_sim', delta_list=delta_list, alpha_list=alpha_list, deltas_measured=deltas_measured, deltas_real=deltas_real, v_measured=v_measured, v_real=v_real)
+
+plt.show()
+

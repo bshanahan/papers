@@ -1,0 +1,227 @@
+# settings file for BOUT++
+#
+# Turbulence simulation in a 2D slab
+#
+# Neutral gas
+# ===========
+# 1. Set solver to cvode, and enable preconditioning
+# 2. Set neutral_model = 1
+# 3. xout boundary conditions on Nn and Pn used to set neutral gas temperature. 
+#    Remember: Pn = Nn * Tn[eV] / Tnorm  so 300K = 0.025eV gives Pn = 5e-5 if Nn=0.1 and Tnorm=50
+# 4. You might want to reduce or remove the density source in [Ne] section
+#
+
+# settings used by the core code
+
+nout = 500    # number of time-steps
+timestep = 4e1 # time between outputs
+
+MXG = 2
+MYG = 0      # No y derivatives, so no guard cells needed in y
+
+[mesh]
+
+Lx = 0.20  # Length in x [m]
+Lz = 0.20  # Length in z [m]
+
+nx = 516   # Radial resolution including 4 guard cells
+ny = 1
+nz = 512   # number of points in z direction (2^n)
+
+Rxy = 6.1    # Major radius
+
+Bpxy = 2.3226321170100617  # Magnetic field [T] (Obtained from Webservices)
+
+bxcvz = 0.02829451641866832 ## Obtained from web services ## 1./Rxy^2  # Curvature
+
+ixseps1 = -1
+ixseps2 = -1
+
+Bxy = Bpxy
+Btxy = 0.0
+hthe = 1.0
+
+dx = Lx * Rxy * Bpxy / (nx - 4) # x is in poloidal flux
+dy = 1.0 
+dz = Lz / (Rxy * nz)   # z in radians
+
+symmetricGlobalX = true
+
+[mesh:paralleltransform]
+type=identity
+##################################################
+# derivative methods
+
+[mesh:ddx]
+
+first = C2  
+second = C2
+upwind = W3
+
+[mesh:ddy]
+
+first = C2
+second = C2
+upwind = W3
+
+[mesh:ddz]
+
+first = C2
+second = C2
+upwind = W3
+
+###################################################
+# Time-integration solver
+
+[solver]
+
+# Note: If evolving neutrals, need preconditioning
+#type = cvode
+use_precon = false
+
+atol = 1.0e-10  # absolute tolerance
+rtol = 1.0e-5   # relative tolerance
+mxstep = 1000000  # Maximum internal steps per output
+
+##################################################
+# Electrostatic potential solver
+
+[phiSolver]
+inner_boundary_flags = 1   # INVERT_DC_GRAD
+outer_boundary_flags = 16  # INVERT_SET  (2.8 * Te)
+
+
+[aparSolver]
+inner_boundary_flags = 1 # 1024 = INVERT_IN_CYLINDER  (cylinder axis)
+outer_boundary_flags = 0
+
+# general settings for the model
+
+[Hermes]
+
+electromagnetic = false  # Electromagnetic? Otherwise electrostatic
+FiniteElMass    = false  # Finite electron mass?
+
+# Electrostatic potential
+split_n0 = false  # Solve n=0 separately?
+newXZsolver = false # Use LaplaceXZ solver
+
+# NOTE: all currents switched off for fluid run
+j_diamag       = true  # Diamagnetic current: Vort <-> Pe
+j_par          = false # Parallel current:    Vort <-> Psi
+
+parallel_flow  = false # Flows along magnetic fields
+pe_par         = false # Parallel pressure gradient: Pe <-> Psi
+resistivity    = false # Resistivity: Psi -> Pe
+thermal_flux   = false 
+thermal_force  = false
+electron_viscosity = false
+thermal_conduction = false
+
+neutral_model = 0 	# Evolve neutral gas method
+			# 0 - no neutrals
+			# 1 - perp diffusion
+			# 2 - exponential model for Nn
+		 	# 3 - full neutral model
+                        # 4 - Diffusive in XZ, fluid in Y
+frecycle = 0.0
+carbon_fraction = 0.0  # Carbon %
+
+## Settings for 2D parallel closures
+sinks = true
+lpar = 105.
+sink_invlpar = (1/Hermes:lpar)
+sheath_closure = true
+drift_wave = false
+
+radial_buffers = false  # Add damping regions near inner and outer boundaries
+
+classical_diffusion = true  # Collisional transport
+
+anomalous_D = -0.1  # Anomalous density diffusion [m^2/s]
+anomalous_chi = -0.2 # Anomalous thermal diffusion [m^2/s]
+
+poloidal_flows = false
+
+ion_velocity   = false
+
+ion_neutral = 0.0
+
+boussinesq = false   # Use Boussinesq approximation
+
+ne_bndry_flux = true
+pe_bndry_flux = true
+vort_bndry_flux = false
+
+ramp_mesh      = false
+ramp_timescale = 1e4
+
+sheath_model = 0  # 0 = Bohn, 1 = Loizu, 2 = Bohm + free density, 3 = insulating sheath
+sheath_yup = false
+sheath_ydown = false
+sheath_gamma = 6.5
+neutral_gamma = 0.0
+
+startprofiles = false
+
+core_sources = false # Only sources in the core
+adapt_source = false   # Feedback on profiles (PI controller)
+energy_source = true   # Constant power per particle (at fixed x). False -> Constant power per volume
+
+staggered = false
+
+verbose = true  # Output additional fields Telim and Jpar
+
+Nnorm = 5.5e18  # Background plasma density (m^-3)
+Tnorm = 18.     # Electron Temperature (eV)
+Bnorm = 2.3226321170100617  # Magnetic field [T]
+AA = 1
+
+# Dissipation, numerical terms
+
+low_n_diffuse = false   # Parallel diffusion at low density
+low_n_diffuse_perp = true  # Perpendicular diffusion at low density
+
+# settings for individual variables
+# The section "All" defines default settings for all variables
+# These can be overridden for individual variables in
+# a section of that name.
+
+[all]
+scale = 0.0 # default size of initial perturbations
+
+bndry_all = neumann # Zero-gradient on all boundaries
+delta_perp = 0.12
+delta_z = delta_perp/2.7 #perpendicular blob size
+delta_x = delta_perp/2.7
+alpha = 0.30 #blob amplitude, 1.0 = 2*background
+temperature_perturbation = 1.0 #temperature, 1.0=thermalized blob
+
+
+[Ne]  # Density
+scale = 1.0 # size of perturbation
+zl = z / (2*pi)
+
+function = 1 + all:alpha*exp(-((x-0.42)/(all:delta_x))^2 - ((zl-0.5)/(all:delta_z))^2) #* sin(y)^6
+
+#function = 1 + height * exp(-((x-0.25)/width)^2 - ((z/(2*pi) - 0.5)/(2*width))^2)
+# + height * exp(-((x-0.5)/width)^2 - ((z/(2*pi) - 0.5)/(2*width))^2)
+
+source = 0
+
+[Pe]
+scale = 1.0
+zl = z / (2*pi)
+
+function = 1 + all:temperature_perturbation*all:alpha*exp(-((x-0.42)/(all:delta_x))^2 - ((zl-0.5)/(all:delta_z))^2) #* sin(y)^6
+
+
+[Vort]
+bndry_all = dirichlet_o2
+
+
+[phi_r]
+scale=1.5#*all:delta_perp/0.12
+#bndry_all = neumann
+function = (.8441e3/2.0)*(1-x)
+
