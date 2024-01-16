@@ -1,2 +1,2 @@
-# papers
+# Shanahan, Bold, Dudson JPP 2024
 This repo includes the input file for the simulations in Shanahan et al., JPP 2024. The grid file was obtained using Zoidberg (github.com/boutproject/zoidberg) with the coefficients for the Dommaschk potentials kindly supplied by António Coelho via private communication. The Hermes-i model is found at github.com/dschwoerer/hermes-2, commit 37e045925378e20447457f5e911e4a4d926d34a9.  The model was compiled with BOUT++ v.5.0 (github.com/boutproject/BOUT-dev).
